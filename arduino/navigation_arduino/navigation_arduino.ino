@@ -37,7 +37,7 @@ const int in4 = 8;
  
 
 const int PWM_INCREMENT = 1;
-const int TICKS_PER_REVOLUTION = 1860;
+const int TICKS_PER_REVOLUTION = 1753; //left:1947
 const double WHEEL_RADIUS = 0.033;
 const double WHEEL_BASE = 0.17;
 const double TICKS_PER_METER = (TICKS_PER_REVOLUTION / (2.0*3.141592*WHEEL_RADIUS));
