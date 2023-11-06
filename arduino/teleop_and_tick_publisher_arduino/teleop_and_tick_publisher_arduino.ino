@@ -3,7 +3,7 @@
 #include <geometry_msgs/Twist.h>
 #include "math.h"
 #include <std_msgs/Int16.h>
-
+#include <std_msgs/Float64.h>
 
 #define ENC_IN_LEFT_A 2
 #define ENC_IN_RIGHT_A 3
@@ -15,21 +15,33 @@ boolean Direction_right = true;
 
 const int encoder_minimum = -32768;
 const int encoder_maximum = 32767;
- 
+
+std_msgs::Float64 linear_velocity_error_integral = 0.0;
+std_msgs::Float64 angular_velocity_error_integral = 0.0;
 
 std_msgs::Int16 right_wheel_tick_count;
 ros::Publisher rightPub("right_ticks", &right_wheel_tick_count);
- 
 std_msgs::Int16 left_wheel_tick_count;
 ros::Publisher leftPub("left_ticks", &left_wheel_tick_count);
 
-const int interval = 200;
+geometry_msgs::Twist cmd_vel;
+ros::Publisher motor_control_pub("motor_control", &cmd_vel);
+
+const int interval = 30;
 long previousMillis = 0;
 long currentMillis = 0;
 
 int pwmReq = 0;
 
 ros::NodeHandle nh;
+
+double Kp_linear = 1.0;
+double Ki_linear = 0.1;
+double Kd_linear = 0.01;
+
+double Kp_angular = 1.0;
+double Ki_angular = 0.1;
+double Kd_angular = 0.01;
 
 void right_wheel_tick() {
    
@@ -102,8 +114,22 @@ digitalWrite(8, an4);}
 
 
 void dc_driver(const geometry_msgs::Twist& msg){
-float a = msg.linear.x;
-float c = msg.angular.z;
+// Calculate time difference
+static ros::Time previous_time = nh.now();
+ros::Time current_time = nh.now();
+double delta_time = (current_time - previous_time).toSec();
+
+  // Calculate linear and angular velocity errors
+double linear_velocity_error = msg.linear.x - cmd_vel.linear.x;
+double angular_velocity_error = msg.angular.z - cmd_vel.angular.z;
+
+  // Calculate time derivative (D) terms
+double linear_velocity_error_derivative = (linear_velocity_error - cmd_vel.linear.x) / delta_time;
+double angular_velocity_error_derivative = (angular_velocity_error - cmd_vel.angular.z) / delta_time;
+cmd_vel.linear.x = Kp_linear * linear_velocity_error + Ki_linear * linear_velocity_error_integral + Kd_linear * linear_velocity_error_derivative;
+cmd_vel.angular.z = Kp_angular * angular_velocity_error + Ki_angular * angular_velocity_error_integral + Kd_angular * angular_velocity_error_derivative;
+double a = cmd_vel.linear.x;
+double c = cmd_vel.angular.z;
 
 if(a>0 && c==0){ //straight
 drive(80,80,1,0,0,1);
@@ -122,6 +148,11 @@ drive(80,80,0,1,0,1);
 if(a==0 && c<0){ //left
 drive(80,80,1,0,1,0);
 }
+linear_velocity_error_integral += linear_velocity_error * delta_time;
+angular_velocity_error_integral += angular_velocity_error * delta_time;
+
+previous_time = current_time;
+motor_control_pub.publish(&cmd_vel);
 }
 ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel", dc_driver); 
 
@@ -142,10 +173,11 @@ pinMode(9, OUTPUT); //ENA
 
 attachInterrupt(digitalPinToInterrupt(ENC_IN_LEFT_A), left_wheel_tick, RISING);
 attachInterrupt(digitalPinToInterrupt(ENC_IN_RIGHT_A), right_wheel_tick, RISING);
-nh.getHardware()->setBaud(128000);
+nh.getHardware()->setBaud(57600);
 nh.initNode();
 nh.advertise(rightPub);
 nh.advertise(leftPub);
+nh.advertise(motor_control_pub);
 nh.subscribe(sub);
 }
 
