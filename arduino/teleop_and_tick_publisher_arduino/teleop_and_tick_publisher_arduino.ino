@@ -16,8 +16,8 @@ boolean Direction_right = true;
 const int encoder_minimum = -32768;
 const int encoder_maximum = 32767;
 
-std_msgs::Float64 linear_velocity_error_integral = 0.0;
-std_msgs::Float64 angular_velocity_error_integral = 0.0;
+std_msgs::Float64 linear_velocity_error_integral;
+std_msgs::Float64 angular_velocity_error_integral;
 
 std_msgs::Int16 right_wheel_tick_count;
 ros::Publisher rightPub("right_ticks", &right_wheel_tick_count);
@@ -42,6 +42,9 @@ double Kd_linear = 0.01;
 double Kp_angular = 1.0;
 double Ki_angular = 0.1;
 double Kd_angular = 0.01;
+
+double linear_velocity_error_previous = 0.0;
+double angular_velocity_error_previous = 0.0;
 
 void right_wheel_tick() {
    
@@ -113,46 +116,56 @@ digitalWrite(7, an3);
 digitalWrite(8, an4);}
 
 
-void dc_driver(const geometry_msgs::Twist& msg){
-// Calculate time difference
-static ros::Time previous_time = nh.now();
-ros::Time current_time = nh.now();
-double delta_time = (current_time - previous_time).toSec();
+void dc_driver(const geometry_msgs::Twist& msg) {
+  // Calculate time difference
+  static ros::Time previous_time = nh.now();
+  ros::Time current_time = nh.now();
+  double delta_time = (current_time.toSec() - previous_time.toSec());
 
   // Calculate linear and angular velocity errors
-double linear_velocity_error = msg.linear.x - cmd_vel.linear.x;
-double angular_velocity_error = msg.angular.z - cmd_vel.angular.z;
+  double linear_velocity_error = msg.linear.x - cmd_vel.linear.x;
+  double angular_velocity_error = msg.angular.z - cmd_vel.angular.z;
 
   // Calculate time derivative (D) terms
-double linear_velocity_error_derivative = (linear_velocity_error - cmd_vel.linear.x) / delta_time;
-double angular_velocity_error_derivative = (angular_velocity_error - cmd_vel.angular.z) / delta_time;
-cmd_vel.linear.x = Kp_linear * linear_velocity_error + Ki_linear * linear_velocity_error_integral + Kd_linear * linear_velocity_error_derivative;
-cmd_vel.angular.z = Kp_angular * angular_velocity_error + Ki_angular * angular_velocity_error_integral + Kd_angular * angular_velocity_error_derivative;
-double a = cmd_vel.linear.x;
-double c = cmd_vel.angular.z;
+  double linear_velocity_error_derivative = (linear_velocity_error - linear_velocity_error_previous) / delta_time;
+  double angular_velocity_error_derivative = (angular_velocity_error - angular_velocity_error_previous) / delta_time;
 
-if(a>0 && c==0){ //straight
-drive(80,80,1,0,0,1);
-}
+  // Calculate PID control outputs
+  double linear_velocity_error_integral = linear_velocity_error_integral + linear_velocity_error * delta_time;
+  double angular_velocity_error_integral = angular_velocity_error_integral + angular_velocity_error * delta_time;
+  
+  double linear_velocity_error_output = Kp_linear * linear_velocity_error + Ki_linear * linear_velocity_error_integral + Kd_linear * linear_velocity_error_derivative;
+  double angular_velocity_error_output = Kp_angular * angular_velocity_error + Ki_angular * angular_velocity_error_integral + Kd_angular * angular_velocity_error_derivative;
 
-if(a<0 && c==0){ //backward
-drive(80,80,0,1,1,0);
-}
+  // Update the previous error values
+  linear_velocity_error_previous = linear_velocity_error;
+  angular_velocity_error_previous = angular_velocity_error;
 
-if(a==0 && c==0){ //stop
-drive(0,0,0,0,0,0);
-}
-if(a==0 && c>0){ //right
-drive(80,80,0,1,0,1);   
-}
-if(a==0 && c<0){ //left
-drive(80,80,1,0,1,0);
-}
-linear_velocity_error_integral += linear_velocity_error * delta_time;
-angular_velocity_error_integral += angular_velocity_error * delta_time;
+  // Update the previous time
+  previous_time = current_time;
 
-previous_time = current_time;
-motor_control_pub.publish(&cmd_vel);
+  // Assign the calculated values to cmd_vel
+  cmd_vel.linear.x = linear_velocity_error_output;
+  cmd_vel.angular.z = angular_velocity_error_output;
+
+  // Drive the robot
+  double a = cmd_vel.linear.x;
+  double c = cmd_vel.angular.z;
+
+  if (a > 0 && c == 0) { //straight
+    drive(80, 80, 1, 0, 0, 1);
+  } else if (a < 0 && c == 0) { //backward
+    drive(80, 80, 0, 1, 1, 0);
+  } else if (a == 0 && c == 0) { //stop
+    drive(0, 0, 0, 0, 0, 0);
+  } else if (a == 0 && c > 0) { //right
+    drive(80, 80, 0, 1, 0, 1);
+  } else if (a == 0 && c < 0) { //left
+    drive(80, 80, 1, 0, 1, 0);
+  }
+
+  // Publish control commands
+  motor_control_pub.publish(&cmd_vel);
 }
 ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel", dc_driver); 
 
