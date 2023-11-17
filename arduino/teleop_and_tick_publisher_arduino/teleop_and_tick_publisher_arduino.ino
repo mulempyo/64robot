@@ -9,6 +9,7 @@
 #define ENC_IN_RIGHT_A 3
 #define ENC_IN_LEFT_B 4
 #define ENC_IN_RIGHT_B 11
+#define MAX_INTEGRAL 150
  
 boolean Direction_left = true;
 boolean Direction_right = true;
@@ -108,12 +109,13 @@ void left_wheel_tick() {
 
 
 void drive(int Lpwm, int Rpwm ,int an1 ,int an2 ,int an3 ,int an4){
-analogWrite(9, Lpwm);
-analogWrite(10, Rpwm);
-digitalWrite(5, an1);
-digitalWrite(6, an2);
-digitalWrite(7, an3);
-digitalWrite(8, an4);}
+  analogWrite(9, Lpwm);
+  analogWrite(10, Rpwm);
+  digitalWrite(5, an1);
+  digitalWrite(6, an2);
+  digitalWrite(7, an3);
+  digitalWrite(8, an4);
+}
 
 
 void dc_driver(const geometry_msgs::Twist& msg) {
@@ -133,7 +135,9 @@ void dc_driver(const geometry_msgs::Twist& msg) {
   // Calculate PID control outputs
   double linear_velocity_error_integral = linear_velocity_error_integral + linear_velocity_error * delta_time;
   double angular_velocity_error_integral = angular_velocity_error_integral + angular_velocity_error * delta_time;
-  
+
+  linear_velocity_error_integral = constrain(linear_velocity_error_integral, -MAX_INTEGRAL, MAX_INTEGRAL);
+  angular_velocity_error_integral = constrain(angular_velocity_error_integral, -MAX_INTEGRAL, MAX_INTEGRAL);
   double linear_velocity_error_output = Kp_linear * linear_velocity_error + Ki_linear * linear_velocity_error_integral + Kd_linear * linear_velocity_error_derivative;
   double angular_velocity_error_output = Kp_angular * angular_velocity_error + Ki_angular * angular_velocity_error_integral + Kd_angular * angular_velocity_error_derivative;
 
@@ -149,19 +153,19 @@ void dc_driver(const geometry_msgs::Twist& msg) {
   cmd_vel.angular.z = angular_velocity_error_output;
 
   // Drive the robot
-  double a = cmd_vel.linear.x;
-  double c = cmd_vel.angular.z;
+  double a = linear_velocity_error_output;
+  double c = angular_velocity_error_output;
 
   if (a > 0 && c == 0) { //straight
-    drive(80, 80, 1, 0, 0, 1);
-  } else if (a < 0 && c == 0) { //backward
-    drive(80, 80, 0, 1, 1, 0);
-  } else if (a == 0 && c == 0) { //stop
+    drive(100, 100, 1, 0, 1, 0);
+  }else if (a < 0 && c == 0) { //backward
+    drive(a, a, 0, 1, 0, 1);
+  }else if (a == 0 && c == 0) { //stop
     drive(0, 0, 0, 0, 0, 0);
-  } else if (a == 0 && c > 0) { //right
-    drive(80, 80, 0, 1, 0, 1);
-  } else if (a == 0 && c < 0) { //left
-    drive(80, 80, 1, 0, 1, 0);
+  }else if (a == 0 && c > 0) { //right
+    drive(c, c, 1, 0, 0, 1);
+  }else if (a == 0 && c < 0) { //left
+    drive(c, c, 0, 1, 1, 0);
   }
 
   // Publish control commands
@@ -197,8 +201,7 @@ nh.subscribe(sub);
 void loop() {
 nh.spinOnce();
 currentMillis = millis();
-leftPub.publish( &left_wheel_tick_count );
-rightPub.publish( &right_wheel_tick_count );
+
 
   if (currentMillis - previousMillis > interval) {
     previousMillis = currentMillis;

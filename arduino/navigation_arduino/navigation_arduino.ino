@@ -222,12 +222,12 @@ void set_pwm_values() {
   }
  
   if (pwmRightReq > 0) { 
-    digitalWrite(in3, LOW);
-    digitalWrite(in4, HIGH);
-  }
-  else if(pwmRightReq < 0) { 
     digitalWrite(in3, HIGH);
     digitalWrite(in4, LOW);
+  }
+  else if(pwmRightReq < 0) { 
+    digitalWrite(in3, LOW);
+    digitalWrite(in4, HIGH);
   }
   else if (pwmRightReq == 0 && pwmRightOut == 0) { 
     digitalWrite(in3, LOW);
