@@ -1,10 +1,12 @@
-#define ENC_IN_RIGHT_A 2
+
+
+#define ENC_IN_RIGHT_A 4
 volatile long right_wheel_pulse_count = 0;
  
 void setup() {
  
   // Open the serial port at 9600 bps
-  Serial.begin(9600); 
+  Serial.begin(57600); 
  
   // Set pin states of the encoder
   pinMode(ENC_IN_RIGHT_A , INPUT_PULLUP);
