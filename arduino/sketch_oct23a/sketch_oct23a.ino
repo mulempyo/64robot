@@ -1,6 +1,6 @@
 
 
-#define ENC_IN_RIGHT_A 4
+#define ENC_IN_RIGHT_A 2
 volatile long right_wheel_pulse_count = 0;
  
 void setup() {
